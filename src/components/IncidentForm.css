@@ -73,6 +73,12 @@
   padding-right: 2.5rem;
 }
 
+.form-hint {
+  font-size: 0.8125rem;
+  color: var(--text-tertiary, #94a3b8);
+  margin-top: -0.25rem;
+}
+
 .form-error {
   font-size: 0.8125rem;
   color: #ef4444;

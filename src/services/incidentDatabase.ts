@@ -10,6 +10,13 @@ class IncidentDatabase {
     return `INC-${Date.now()}-${this.nextId++}`
   }
 
+  // Bulk-load pre-built incidents (e.g. seed data)
+  seed(incidents: Incident[]): void {
+    for (const inc of incidents) {
+      this.incidents.set(inc.id, inc)
+    }
+  }
+
   // Create a new incident
   create(input: CreateIncidentInput): Incident {
     const id = this.generateId()
