@@ -14,16 +14,21 @@ export interface IncidentData {
   severity: 'low' | 'medium' | 'high' | 'critical'
   type: 'security' | 'performance' | 'availability' | 'data' | 'other'
   assignee?: string
+  affectedSystems?: string
+  initialObservations?: string
 }
 
 export function IncidentForm({ isOpen, onClose, onSubmit }: IncidentFormProps) {
-  const [formData, setFormData] = useState<IncidentData>({
+  const initialFormData: IncidentData = {
     title: '',
     description: '',
     severity: 'medium',
     type: 'other',
     assignee: '',
-  })
+    affectedSystems: '',
+    initialObservations: '',
+  }
+  const [formData, setFormData] = useState<IncidentData>(initialFormData)
   const [errors, setErrors] = useState<Partial<Record<keyof IncidentData, string>>>({})
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -60,25 +65,13 @@ export function IncidentForm({ isOpen, onClose, onSubmit }: IncidentFormProps) {
     onSubmit(formData)
     
     // Reset form
-    setFormData({
-      title: '',
-      description: '',
-      severity: 'medium',
-      type: 'other',
-      assignee: '',
-    })
+    setFormData(initialFormData)
     setErrors({})
     onClose()
   }
 
   const handleCancel = () => {
-    setFormData({
-      title: '',
-      description: '',
-      severity: 'medium',
-      type: 'other',
-      assignee: '',
-    })
+    setFormData(initialFormData)
     setErrors({})
     onClose()
   }
@@ -159,6 +152,37 @@ export function IncidentForm({ isOpen, onClose, onSubmit }: IncidentFormProps) {
               <option value="other">Other</option>
             </select>
           </div>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="affectedSystems" className="form-label">
+            Affected Systems
+          </label>
+          <input
+            type="text"
+            id="affectedSystems"
+            name="affectedSystems"
+            value={formData.affectedSystems}
+            onChange={handleChange}
+            className="form-input"
+            placeholder="e.g., API Gateway, Auth Service, Database (comma-separated)"
+          />
+          <span className="form-hint">Comma-separated list of affected services or systems</span>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="initialObservations" className="form-label">
+            Initial Observations
+          </label>
+          <textarea
+            id="initialObservations"
+            name="initialObservations"
+            value={formData.initialObservations}
+            onChange={handleChange}
+            className="form-textarea"
+            placeholder="What have you observed so far? Any error messages, patterns, or impact details..."
+            rows={3}
+          />
         </div>
 
         <div className="form-group">
