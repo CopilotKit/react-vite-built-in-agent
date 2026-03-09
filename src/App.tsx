@@ -111,14 +111,22 @@ function AppContent() {
     return `${(avgMinutes / 60).toFixed(1)}h`
   }, [incidents])
 
+  // Sort incidents newest-first so the AI sees them in the same order as the dashboard
+  const sortedIncidents = useMemo(() =>
+    [...incidents].sort((a, b) =>
+      new Date(b.timestamps.created).getTime() - new Date(a.timestamps.created).getTime()
+    ),
+    [incidents]
+  )
+
   // Share incident details with the AI
   useCopilotReadable({
-    description: "The current list of incidents with their status, severity, title, description, and timestamps (created, acknowledged, resolved). Use timestamps.created to answer time-based queries like 'incidents in the last 24 hours'.",
+    description: "The current list of incidents sorted newest-first, with their status, severity, title, description, and timestamps (created, acknowledged, resolved). Use timestamps.created to answer time-based queries like 'incidents in the last 24 hours'.",
     value: {
       activeCount,
       total: incidents.length,
       currentTime: new Date().toISOString(),
-      incidents: incidents.map(i => ({
+      incidents: sortedIncidents.map(i => ({
         id: i.id,
         title: i.title,
         severity: i.severity,
@@ -468,7 +476,7 @@ function App() {
             initial: "Hello! I'm your incident response assistant. How can I help you manage incidents today?",
           }}
           suggestions={[
-            { title: "Show Critical Incidents", message: "Show me all P0 and P1 critical incidents" },
+            { title: "Incidents in the last 48 hours", message: "Show a graph of incidents in the last 48 hours" },
             { title: "Severity Chart", message: "Show me a chart of incidents by severity" },
             { title: "Incident Summary", message: "Give me a summary of all active incidents and their current status" },
           ]}
