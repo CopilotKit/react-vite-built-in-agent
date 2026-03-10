@@ -1,16 +1,17 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import './style.css'
 import { CopilotKit, useCopilotReadable } from '@copilotkit/react-core'
-import { CopilotSidebar } from '@copilotkit/react-ui'
+import { CopilotSidebar, useChatContext } from '@copilotkit/react-ui'
 import '@copilotkit/react-ui/styles.css'
 import { Counter } from './components/Counter'
 import { CounterController } from './components/CounterController'
+import { ChatIncidentForm, emptyFormData } from './components/ChatIncidentForm'
+import type { IncidentFormData } from './components/ChatIncidentForm'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { IncidentForm } from './components/IncidentForm'
 import { IncidentsList } from './components/IncidentsList'
 import { IncidentDetail } from './components/IncidentDetail'
 import { CrossIncidentTimeline } from './components/CrossIncidentTimeline'
-import type { IncidentData } from './components/IncidentForm'
 import type { Incident, IncidentSeverity, IncidentStatus } from './types/incident'
 import { fetchAllIncidents } from './services/mockApi'
 
@@ -20,21 +21,63 @@ const statusOrder: Record<IncidentStatus, number> = { Open: 0, Investigating: 1,
 const allSeverities: Array<IncidentSeverity | 'All'> = ['All', 'P0', 'P1', 'P2', 'P3', 'P4']
 const allStatuses: Array<IncidentStatus | 'All'> = ['All', 'Open', 'Investigating', 'Mitigated', 'Resolved']
 
-const severityMap: Record<IncidentData['severity'], IncidentSeverity> = {
-  critical: 'P0',
-  high: 'P1',
-  medium: 'P2',
-  low: 'P3',
-}
-
 function AppContent() {
   const [incidents, setIncidents] = useState<Incident[]>([])
-  const [isIncidentFormOpen, setIsIncidentFormOpen] = useState(false)
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null)
   const [isIncidentsCollapsed, setIsIncidentsCollapsed] = useState(false)
+  const [showReportForm, setShowReportForm] = useState(false)
+  const [formData, setFormData] = useState<IncidentFormData>({ ...emptyFormData })
+  const [formMode, setFormMode] = useState<'editing' | 'review' | 'submitted'>('editing')
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null)
+  const { setOpen } = useChatContext()
 
   useEffect(() => {
     fetchAllIncidents().then(setIncidents)
+  }, [])
+
+  // Find the sidebar's message container for portal rendering
+  useEffect(() => {
+    if (!showReportForm) {
+      setPortalContainer(null)
+      return
+    }
+    const findContainer = () => {
+      const container = document.querySelector('.copilotKitMessages')
+      if (container) {
+        setPortalContainer(container as HTMLElement)
+      } else {
+        requestAnimationFrame(findContainer)
+      }
+    }
+    const timer = setTimeout(findContainer, 50)
+    return () => clearTimeout(timer)
+  }, [showReportForm])
+
+  const handleReportViaChat = useCallback(() => {
+    setOpen(true)
+    setFormData({ ...emptyFormData })
+    setFormMode('editing')
+    setFormErrors({})
+    setShowReportForm(true)
+  }, [setOpen])
+
+  // Called by AI tool to fill the form with data
+  const handleAiFillForm = useCallback((data: Partial<IncidentFormData>) => {
+    setFormData(prev => ({
+      ...prev,
+      ...Object.fromEntries(
+        Object.entries(data).filter(([, v]) => v && String(v).trim())
+      ),
+    }))
+    setFormMode('review')
+    setFormErrors({})
+  }, [])
+
+  const handleFormSubmit = useCallback((newIncident: Incident) => {
+    setIncidents(prev => [newIncident, ...prev])
+    // Keep form visible in submitted state (shows success), auto-hide after delay
+    setTimeout(() => setShowReportForm(false), 3000)
   }, [])
 
   // Filter / sort / search state
@@ -111,6 +154,15 @@ function AppContent() {
     return `${(avgMinutes / 60).toFixed(1)}h`
   }, [incidents])
 
+  // Let the AI know when the incident report form is open and what the user has filled so far
+  useCopilotReadable({
+    description: "The incident report form state. When incidentFormOpen is true, the user has a form open in the chat. currentFormData shows what they've typed so far. When the user asks you to fill it out, complete the remaining fields, or provides incident details, you MUST call the reportIncident tool with ALL fields filled — merge what the user already typed with your best guesses for the empty fields.",
+    value: {
+      incidentFormOpen: showReportForm,
+      currentFormData: showReportForm ? formData : null,
+    },
+  })
+
   // Share incident details with the AI
   useCopilotReadable({
     description: "The current list of incidents with their status, severity, title, description, and timestamps (created, acknowledged, resolved). Use timestamps.created to answer time-based queries like 'incidents in the last 24 hours'.",
@@ -147,36 +199,6 @@ function AppContent() {
         }
       : null,
   })
-
-  const handleReportIncident = useCallback((data: IncidentData) => {
-    const now = new Date().toISOString()
-    const affectedServices = data.affectedSystems
-      ? data.affectedSystems.split(',').map(s => s.trim()).filter(Boolean)
-      : []
-    const timeline: Incident['timeline'] = []
-    if (data.initialObservations?.trim()) {
-      timeline.push({
-        id: crypto.randomUUID(),
-        timestamp: now,
-        type: 'comment',
-        description: data.initialObservations.trim(),
-        author: data.assignee || 'Reporter',
-      })
-    }
-    const newIncident: Incident = {
-      id: crypto.randomUUID(),
-      title: data.title,
-      description: data.description,
-      severity: severityMap[data.severity],
-      status: 'Open',
-      affectedServices,
-      detectionSource: 'manual',
-      timestamps: { created: now },
-      owner: data.assignee,
-      timeline,
-    }
-    setIncidents(prev => [newIncident, ...prev])
-  }, [])
 
   const handleStatusChange = useCallback((incidentId: string, newStatus: IncidentStatus) => {
     const now = new Date().toISOString()
@@ -283,7 +305,7 @@ function AppContent() {
               </div>
               <button
                 className="btn-primary btn-large"
-                onClick={() => setIsIncidentFormOpen(true)}
+                onClick={handleReportViaChat}
               >
                 Report Incident
               </button>
@@ -295,8 +317,12 @@ function AppContent() {
                   <span className="card-badge">Live</span>
                 </div>
                 <div className="card-content">
-                  <Counter count={activeCount} onOpenForm={() => setIsIncidentFormOpen(true)} />
-                  <CounterController incidents={incidents} setIncidents={setIncidents} />
+                  <Counter count={activeCount} />
+                  <CounterController
+                    incidents={incidents}
+                    setIncidents={setIncidents}
+                    onAiFillForm={handleAiFillForm}
+                  />
                 </div>
                 <p className="card-description">
                   Currently open incidents requiring attention
@@ -419,13 +445,6 @@ function AppContent() {
           </section>
         </main>
 
-        {/* Incident Form Modal */}
-        <IncidentForm
-          isOpen={isIncidentFormOpen}
-          onClose={() => setIsIncidentFormOpen(false)}
-          onSubmit={handleReportIncident}
-        />
-
         {/* Incident Detail Modal */}
         {selectedIncident && (
           <IncidentDetail
@@ -450,6 +469,22 @@ function AppContent() {
           </div>
         </footer>
       </div>
+
+      {/* Portal: render incident form directly into the sidebar message area */}
+      {showReportForm && portalContainer && createPortal(
+        <div className="chat-portal-form-wrapper">
+          <ChatIncidentForm
+            formData={formData}
+            onFormDataChange={setFormData}
+            mode={formMode}
+            onModeChange={setFormMode}
+            onSubmit={handleFormSubmit}
+            errors={formErrors}
+            onErrorsChange={setFormErrors}
+          />
+        </div>,
+        portalContainer
+      )}
     </div>
   )
 }
@@ -462,7 +497,18 @@ function App() {
         publicApiKey={import.meta.env.VITE_COPILOTKIT_PUBLIC_API_KEY}
       >
         <CopilotSidebar
-          instructions="You are an AI incident response assistant for IncidentResponse, a platform for managing and resolving security and operational incidents. Help users track incidents, analyze metrics, and respond to issues. When you use the generateChart tool, the chart is rendered automatically in the chat — do NOT add any markdown images, image links, or image syntax in your response. Just describe what the chart shows in plain text."
+          instructions={`You are an AI incident response assistant for IncidentResponse, a platform for managing and resolving security and operational incidents. Help users track incidents, analyze metrics, and respond to issues. When you use the generateChart tool, the chart is rendered automatically in the chat — do NOT add any markdown images, image links, or image syntax in your response. Just describe what the chart shows in plain text.
+
+CRITICAL RULE — Incident Form Filling:
+When a user describes an incident, mentions a problem, or asks you to fill out the incident form, you MUST call the reportIncident tool.
+- You MUST fill ALL 6 fields: title, description, severity, type, affectedSystems, assignee.
+- For fields the user didn't mention, use your best professional judgment to infer reasonable values based on the context.
+- For severity: infer from urgency/impact described. Default to P2 if truly unclear.
+- For type: infer from context (e.g., "breach" = security, "slow" = performance, "down" = availability).
+- For affectedSystems: infer from what the user mentions (e.g., "API gateway" → "API Gateway").
+- For assignee: if not mentioned, suggest a reasonable team like "Platform Team", "Security Team", "SRE Team", etc. based on incident type.
+- For description: write a thorough, professional incident description even if the user gave a vague one-liner.
+- After calling the tool, tell the user to review the form and click "Confirm & Report" if the details look correct, or edit any fields first.`}
           labels={{
             title: "Incident Response Assistant",
             initial: "Hello! I'm your incident response assistant. How can I help you manage incidents today?",

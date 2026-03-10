@@ -7,13 +7,15 @@ import {
   IncidentTimelineChart,
   ServiceImpactChart,
 } from './charts/IncidentCharts'
+import type { IncidentFormData } from './ChatIncidentForm'
 
 interface CounterControllerProps {
   incidents: Incident[]
   setIncidents: React.Dispatch<React.SetStateAction<Incident[]>>
+  onAiFillForm: (data: Partial<IncidentFormData>) => void
 }
 
-export function CounterController({ incidents, setIncidents }: CounterControllerProps) {
+export function CounterController({ incidents, setIncidents, onAiFillForm }: CounterControllerProps) {
   // Tool: Resolve an incident by ID (or the most recent one)
   useFrontendTool({
     name: 'resolveIncident',
@@ -142,31 +144,40 @@ export function CounterController({ incidents, setIncidents }: CounterController
     },
   })
 
-  // Tool: Report a new incident via the AI
+  // Tool: Report/fill a new incident — updates the shared form in the sidebar
   useFrontendTool({
     name: 'reportIncident',
-    description: 'Report a new incident with a title, description, and severity.',
+    description:
+      'Fill out the incident report form with details extracted from the conversation. ' +
+      'You MUST fill ALL 6 fields: title, description, severity, type, affectedSystems, assignee. ' +
+      'Use your best judgment to infer values for fields the user didn\'t mention. ' +
+      'The form will switch to review mode so the user can confirm before submitting.',
     parameters: [
       { name: 'title', type: 'string', description: 'Short title of the incident', required: true },
-      { name: 'description', type: 'string', description: 'Description of the incident', required: false },
-      { name: 'severity', type: 'string', description: 'Severity: P0 (critical), P1 (high), P2 (medium), P3 (low), P4 (info). Defaults to P2.', required: false },
+      { name: 'description', type: 'string', description: 'Detailed description of the incident', required: true },
+      { name: 'severity', type: 'string', description: 'Severity: P0 (critical), P1 (high), P2 (medium), P3 (low), P4 (info)', required: true },
+      { name: 'type', type: 'string', description: 'Incident type: security, performance, availability, data, or other', required: true },
+      { name: 'affectedSystems', type: 'string', description: 'Comma-separated list of affected systems/services', required: true },
+      { name: 'assignee', type: 'string', description: 'Person or team to assign the incident to', required: true },
     ],
-    handler: async ({ title, description = '', severity = 'P2' }: { title: string; description?: string; severity?: string }) => {
-      const validSeverities = ['P0', 'P1', 'P2', 'P3', 'P4'] as const
-      const sev = validSeverities.includes(severity as any) ? (severity as typeof validSeverities[number]) : 'P2'
-      const newIncident: Incident = {
-        id: crypto.randomUUID(),
-        title,
-        description,
-        severity: sev,
-        status: 'Open',
-        affectedServices: [],
-        detectionSource: 'copilot',
-        timestamps: { created: new Date().toISOString() },
-        timeline: [],
-      }
-      setIncidents(prev => [newIncident, ...prev])
-      return `Incident "${title}" reported with severity ${sev}.`
+    handler: async (args: {
+      title: string
+      description: string
+      severity: string
+      type: string
+      affectedSystems: string
+      assignee: string
+    }) => {
+      // Update the shared form state — the portal form will reactively show the filled data
+      onAiFillForm({
+        title: args.title,
+        description: args.description,
+        severity: args.severity,
+        type: args.type,
+        affectedSystems: args.affectedSystems,
+        assignee: args.assignee,
+      })
+      return `Incident form has been filled with all details. The user can now review and confirm.`
     },
   })
 
