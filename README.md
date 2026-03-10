@@ -1,6 +1,8 @@
 # Agentic Incident Response
 
-An incident response platform built with React, TypeScript, and [CopilotKit](https://docs.copilotkit.ai/). Track, triage, and resolve security and operational incidents with an AI assistant that can read your data, update statuses, generate analysis, and render charts — all from the chat sidebar.
+https://github.com/user-attachments/assets/e53d0245-f5f5-41a4-a46a-5a80a625ec22
+
+An incident response platform built with React, TypeScript, and [CopilotKit](https://github.com/CopilotKit/CopilotKit). Track, triage, and resolve security and operational incidents with an AI assistant that can read your data, update statuses, generate analysis, and render charts — all from the chat sidebar.
 
 ## What It Does
 

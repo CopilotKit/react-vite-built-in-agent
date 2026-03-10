@@ -1,4 +1,4 @@
-import { useFrontendTool } from '@copilotkit/react-core'
+import { useFrontendTool, useRenderToolCall } from '@copilotkit/react-core'
 import type { Incident } from '../types/incident'
 import { generateAnalysis } from '../data/mockAnalysisData'
 import {
@@ -44,7 +44,7 @@ export function CounterController({ incidents, setIncidents, onAiFillForm }: Cou
       )
       return `Resolved incident "${target.title}" (${target.id}).`
     },
-  })
+  }, [incidents])
 
   // Tool: Clear all incidents (resolve all)
   useFrontendTool({
@@ -62,7 +62,7 @@ export function CounterController({ incidents, setIncidents, onAiFillForm }: Cou
       )
       return 'All incidents resolved.'
     },
-  })
+  }, [incidents])
 
   // Tool: Update incident status
   useFrontendTool({
@@ -108,7 +108,7 @@ export function CounterController({ incidents, setIncidents, onAiFillForm }: Cou
       )
       return `Updated incident "${target.title}" status to ${newStatus}.`
     },
-  })
+  }, [incidents])
 
   // Tool: Add a comment to an incident's timeline
   useFrontendTool({
@@ -142,7 +142,7 @@ export function CounterController({ incidents, setIncidents, onAiFillForm }: Cou
       )
       return `Added comment to incident "${target.title}".`
     },
-  })
+  }, [incidents])
 
   // Tool: Report/fill a new incident — updates the shared form in the sidebar
   useFrontendTool({
@@ -179,7 +179,7 @@ export function CounterController({ incidents, setIncidents, onAiFillForm }: Cou
       })
       return `Incident form has been filled with all details. The user can now review and confirm.`
     },
-  })
+  }, [incidents])
 
   // Tool: Analyze an incident — generates security intelligence
   useFrontendTool({
@@ -212,9 +212,9 @@ export function CounterController({ incidents, setIncidents, onAiFillForm }: Cou
         ...analysis.runbooks.map(r => `- ${r.title} (~${r.estimatedMinutes} min)`),
       ].filter(Boolean).join('\n')
     },
-  })
+  }, [incidents])
 
-  // Tool: Generate a chart visualization of incident data
+  // Tool: Generate a chart — handler only, rendering is separate below
   useFrontendTool({
     name: 'generateChart',
     description:
@@ -247,6 +247,20 @@ export function CounterController({ incidents, setIncidents, onAiFillForm }: Cou
 
       return summaries[chartType] || `Chart rendered for ${total} incidents.`
     },
+  }, [incidents])
+
+  // Render: generateChart tool calls get rendered as chart components in the chat
+  useRenderToolCall({
+    name: 'generateChart',
+    description: 'Renders a chart in the chat',
+    parameters: [
+      {
+        name: 'chartType',
+        type: 'string',
+        description: 'The type of chart to render',
+        required: true,
+      },
+    ],
     render: (props) => {
       if (props.status === 'executing' || props.status === 'inProgress') {
         return (
@@ -257,22 +271,18 @@ export function CounterController({ incidents, setIncidents, onAiFillForm }: Cou
         )
       }
 
-      const { args, result } = props
-      const chartType = args.chartType
+      const chartType = props.args?.chartType
 
-      // Use args.chartType directly, fall back to parsing result
-      if (chartType === 'severity' || result?.includes('Severity distribution'))
-        return <SeverityDistributionChart incidents={incidents} />
-      if (chartType === 'status' || result?.includes('Status breakdown'))
-        return <StatusBreakdownChart incidents={incidents} />
-      if (chartType === 'timeline' || result?.includes('Timeline of'))
-        return <IncidentTimelineChart incidents={incidents} />
-      if (chartType === 'services' || result?.includes('Top affected services'))
-        return <ServiceImpactChart incidents={incidents} />
+      const chartMap: Record<string, React.ReactElement> = {
+        severity: <SeverityDistributionChart incidents={incidents} />,
+        status: <StatusBreakdownChart incidents={incidents} />,
+        timeline: <IncidentTimelineChart incidents={incidents} />,
+        services: <ServiceImpactChart incidents={incidents} />,
+      }
 
-      return <SeverityDistributionChart incidents={incidents} />
+      return chartMap[chartType] || <SeverityDistributionChart incidents={incidents} />
     },
-  })
+  }, [incidents])
 
   return null
 }

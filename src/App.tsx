@@ -165,12 +165,12 @@ function AppContent() {
 
   // Share incident details with the AI
   useCopilotReadable({
-    description: "The current list of incidents with their status, severity, title, description, and timestamps (created, acknowledged, resolved). Use timestamps.created to answer time-based queries like 'incidents in the last 24 hours'.",
+    description: "The current list of incidents sorted newest-first, with their status, severity, title, description, and timestamps (created, acknowledged, resolved). Use timestamps.created to answer time-based queries like 'incidents in the last 24 hours'.",
     value: {
       activeCount,
       total: incidents.length,
       currentTime: new Date().toISOString(),
-      incidents: incidents.map(i => ({
+      incidents: sortedIncidents.map(i => ({
         id: i.id,
         title: i.title,
         severity: i.severity,
@@ -514,7 +514,7 @@ When a user describes an incident, mentions a problem, or asks you to fill out t
             initial: "Hello! I'm your incident response assistant. How can I help you manage incidents today?",
           }}
           suggestions={[
-            { title: "Show Critical Incidents", message: "Show me all P0 and P1 critical incidents" },
+            { title: "Incidents in the last 48 hours", message: "Show a graph of incidents in the last 48 hours" },
             { title: "Severity Chart", message: "Show me a chart of incidents by severity" },
             { title: "Incident Summary", message: "Give me a summary of all active incidents and their current status" },
           ]}
