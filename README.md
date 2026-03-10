@@ -81,3 +81,4 @@ src/
 
 server.js                          # Express + CopilotKit runtime
 ```
+## MIT License
